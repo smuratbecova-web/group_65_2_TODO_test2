@@ -1,46 +1,92 @@
-import flet as ft 
-from db import main_db
+import flet as ft
 
-def main_page(page: ft.Page):
-    page.title = 'ToDo List'
-    page.theme_mode = ft.ThemeMode.LIGHT
+from db.main_db import (
+    init_db,
+    add_task,
+    get_tasks,
+    delete_task,
+    update_task
+)
 
-    task_list = ft.Column() 
 
-    def view_task(task_id, task_text):
-        task_field = ft.TextField(value=task_text, expand=True, read_only=True)
+def main(page: ft.Page):
+    page.title = "Список покупок"
 
-        def save_edit(_):
-            main_db.update_task(task_id=task_id, new_task=task_field.value)
-            task_field.read_only = True
-            page.update()
+    init_db()
 
-        save_button = ft.IconButton(icon=ft.Icons.SAVE, on_click=save_edit)
+    task_input = ft.TextField(label="Новый товар", width=300)
+    tasks_column = ft.Column()
 
-        def enable_edit(_):
-            if task_field.read_only == True:
-                task_field.read_only = False
-            else:
-                task_field.read_only = True
-            page.update()
+    filter_type = "all"
 
-        edit_button = ft.IconButton(icon=ft.Icons.EDIT, on_click=enable_edit)
-        
-        return ft.Row([task_field, edit_button, save_button])
+    def load_tasks():
+        tasks_column.controls.clear()
 
-    def add_task_flet(_):
+        tasks = get_tasks(filter_type)
+
+        for task in tasks:
+            task_id = task[0]
+            task_name = task[1]
+            completed = task[2]
+
+            checkbox = ft.Checkbox(
+                label=task_name,
+                value=bool(completed),
+                on_change=lambda e, tid=task_id: change_status(e, tid)
+            )
+
+            delete_btn = ft.TextButton(
+    "Удалить",
+    on_click=lambda e, tid=task_id: remove_task(tid)
+)
+
+            tasks_column.controls.append(
+                ft.Row([checkbox, delete_btn])
+            )
+
+        page.update()
+
+    def add_new_task(e):
         if task_input.value:
-            task_text = task_input.value.strip()
-            task_id = main_db.add_task(task=task_text)
-            task_input.value = None
-            task_list.controls.append(view_task(task_id=task_id, task_text=task_text))
-            page.update()
+            add_task(task_input.value)
+            task_input.value = ""
+            load_tasks()
 
-    task_input = ft.TextField(label='Введите задачу', on_submit=add_task_flet)
+    def remove_task(task_id):
+        delete_task(task_id)
+        load_tasks()
 
-    page.add(task_input, task_list)
+    def change_status(e, task_id):
+        update_task(task_id, int(e.control.value))
+        load_tasks()
+
+    def set_filter(e):
+        nonlocal filter_type
+        filter_type = e.control.data
+        load_tasks()
+
+    add_button = ft.ElevatedButton(
+        "ADD",
+        on_click=add_new_task
+    )
+
+    filter_row = ft.Row([
+        ft.ElevatedButton("Все", data="all", on_click=set_filter),
+        ft.ElevatedButton("Купленные", data="done", on_click=set_filter),
+        ft.ElevatedButton("Не купленные", data="not_done", on_click=set_filter),
+    ])
+
+    page.add(
+        ft.Text("Список покупок", size=30),
+
+        ft.Row([task_input, add_button]),
+
+        filter_row,
+
+        tasks_column
+    )
+
+    load_tasks()
 
 
-if __name__ == '__main__':
-    main_db.init_db()
-    ft.app(main_page)
+ft.app(target=main)

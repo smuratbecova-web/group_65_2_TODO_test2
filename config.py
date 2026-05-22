@@ -1,1 +1,1 @@
-path_db = 'db/todo.db'
+path_db = "tasks.db"
